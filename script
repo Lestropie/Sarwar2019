@@ -1,0 +1,78 @@
+#!/bin/bash
+
+# Reproduce the steps for demonstrating the operation of SIFT and SIFT2 on the phantom structure and reconstruction presented in:
+# Sarwar T, Ramamohanarao K, Zalesky A
+# Mapping connectomes with diffusion MRI: deterministic or probabilistic tractography?
+# Magn Reson Med. 2019 Feb;81(2):1368-1384. doi: 10.1002/mrm.27471. Epub 2018 Oct 10
+
+# Files provided in directory 'data/':
+# tracks_control.tck: Streamlines data for the control, containing 4 streamlines in each bundle
+# tracks_patient.tck: Streamlines data for the patient, containing 2 streamlines in the upper bundle and 4 in the lower bundle
+# FODs_control.mif: Fibre Orientation Distribution data for a control subject with no pathology in the upper bundle
+# FODs_patient.mif: Fibre Orientation Distribution data for a patient that includes pathology in the upper bundle
+# mask_lower.mif: Mask covering the volume of the lower bundle
+# mask_upper.mif: Mask covering the volume of the upper bundle
+
+# A working installation of MRtrix3 is required for this script to execute successfully
+
+rm -rf tmp/
+mkdir tmp
+
+declare -a subjects=("control" "patient")
+declare -a bundles=("upper" "lower")
+
+# First: SIFT for both subjects
+
+for sub in "${subjects[@]}"; do
+
+    # Run SIFT; we will also capture some of the optional outputs from SIFT to allow us to interrogate the model
+    mkdir tmp/SIFT_${sub}
+    cd tmp/SIFT_${sub}/
+    # - Need to disable multi-threading in order to prevent tcksift from freezing due to having more threads than tracks
+    # - -term_number used to prevent premature termination of SIFT due to quantisation limit
+    tcksift ../../data/tracks_${sub}.tck ../../data/FODs_${sub}.mif ../${sub}_SIFT.tck -out_mu mu.txt -output_debug -term_number 1 -nthreads 0 -quiet
+    cd ../../
+
+    echo ""
+    echo "SIFT data for \""${sub}"\":"
+    echo "Track count before SIFT: "$(tckinfo data/tracks_${sub}.tck | grep " count" | tr -d '[:space:]' | cut -d":" -f2)
+    echo "Track count after SIFT: "$(tckinfo tmp/${sub}_SIFT.tck | grep " count" | tr -d '[:space:]' | cut -d":" -f2)
+    echo "Cost function before SIFT: "$(mrmath tmp/SIFT_${sub}/before_cost.mif sum - -axis 0 -quiet | mrmath - sum - -axis 1 -quiet | mrmath - sum - -axis 2 -quiet | mrstats - -output mean)
+    echo "Cost function after SIFT: "$(mrmath tmp/SIFT_${sub}/after_cost.mif sum - -axis 0 -quiet | mrmath - sum - -axis 1 -quiet | mrmath - sum - -axis 2 -quiet | mrstats - -output mean)
+
+    # In order to compare connection densties between subjects, the streamline counts need to be scaled by the SIFT proportionality coefficient:
+    MU=$(cat tmp/SIFT_${sub}/mu.txt)
+    echo "Proportionality coefficient after SIFT: "$MU
+
+    # Now we obtain the estimated connection density of each bundle
+    for bundle in "${bundles[@]}"; do
+        tckedit tmp/${sub}_SIFT.tck -include data/mask_${bundle}.mif tmp/${sub}_SIFT_${bundle}.tck -quiet
+        COUNT=$(tckinfo tmp/${sub}_SIFT_${bundle}.tck | grep " count" | tr -d '[:space:]' | cut -d":" -f2)
+        echo "SIFT connectivity of "${bundle}" bundle: "$COUNT" streamlines, scaled: "$(echo "$MU * $COUNT" | bc)
+    done
+
+done
+
+# Now: SIFT2 for both subjects
+
+for sub in "${subjects[@]}"; do
+
+    mkdir tmp/SIFT2_${sub}
+    cd tmp/SIFT2_${sub}/
+    tcksift2 ../../data/tracks_${sub}.tck ../../data/FODs_${sub}.mif ../${sub}.csv -out_mu mu.txt -output_debug -quiet
+    cd ../../
+
+    echo ""
+    echo "SIFT2 data for \""${sub}"\":"
+    echo "Cost function before SIFT2: "$(mrmath tmp/SIFT2_${sub}/before_cost.mif sum - -axis 0 -quiet | mrmath - sum - -axis 1 -quiet | mrmath - sum - -axis 2 -quiet | mrstats - -output mean)
+    echo "Cost function after SIFT2: "$(mrmath tmp/SIFT2_${sub}/after_cost.mif sum - -axis 0 -quiet | mrmath - sum - -axis 1 -quiet | mrmath - sum - -axis 2 -quiet | mrstats - -output mean)
+
+    MU=$(cat tmp/SIFT2_${sub}/mu.txt)
+    echo "Proportionality coefficient: "$MU
+
+    for bundle in "${bundles[@]}"; do
+        tckedit data/tracks_${sub}.tck -tck_weights_in tmp/${sub}.csv -include data/mask_${bundle}.mif -tck_weights_out tmp/${sub}_${bundle}.csv tmp/${sub}_${bundle}.tck -quiet
+        echo "SIFT2 connectivity of "${bundle}" bundle: "$(cat tmp/${sub}_${bundle}.csv | tr " " "+" | sed 's/\(.*\)+$/\1/' | awk -v mu=${MU} '{printf("%s*(%s)\n",mu,$1)}' | bc)
+    done
+
+done
