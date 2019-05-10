@@ -18,48 +18,57 @@
 rm -rf tmp/
 mkdir tmp
 
+declare -a tracks=("sparse" "dense")
 declare -a subjects=("control" "patient")
 declare -a bundles=("upper" "lower")
 
 # First: SIFT for both subjects
 
-for sub in "${subjects[@]}"; do
+# TODO Want to run for sparse tracks, the dense tracks
+for tck in "${tracks[@]}"; do
 
-    # Run SIFT; we will also capture some of the optional outputs from SIFT to allow us to interrogate the model
-    mkdir tmp/SIFT_${sub}
-    cd tmp/SIFT_${sub}/
-    # - Need to disable multi-threading in order to prevent tcksift from freezing due to having more threads than tracks
-    # - -term_number used to prevent premature termination of SIFT due to quantisation limit
-    tcksift ../../data/tracks_${sub}.tck ../../data/FODs_${sub}.mif ../${sub}_SIFT.tck -out_mu mu.txt -output_debug -term_number 1 -nthreads 0 -quiet
-    cd ../../
+    for sub in "${subjects[@]}"; do
 
-    echo ""
-    echo "SIFT data for \""${sub}"\":"
-    echo "Track count before SIFT: "$(tckinfo data/tracks_${sub}.tck | grep " count" | tr -d '[:space:]' | cut -d":" -f2)
-    echo "Track count after SIFT: "$(tckinfo tmp/${sub}_SIFT.tck | grep " count" | tr -d '[:space:]' | cut -d":" -f2)
-    echo "Cost function before SIFT: "$(mrmath tmp/SIFT_${sub}/before_cost.mif sum - -axis 0 -quiet | mrmath - sum - -axis 1 -quiet | mrmath - sum - -axis 2 -quiet | mrstats - -output mean)
-    echo "Cost function after SIFT: "$(mrmath tmp/SIFT_${sub}/after_cost.mif sum - -axis 0 -quiet | mrmath - sum - -axis 1 -quiet | mrmath - sum - -axis 2 -quiet | mrstats - -output mean)
+        # Run SIFT; we will also capture some of the optional outputs from SIFT to allow us to interrogate the model
+        mkdir tmp/SIFT_${tck}_${sub}
+        cd tmp/SIFT_${tck}_${sub}/
+        # - Need to disable multi-threading in order to prevent tcksift from freezing due to having more threads than tracks
+        # - -term_number used to prevent premature termination of SIFT due to quantisation limit
+        tcksift ../../data/tracks_${tck}_${sub}.tck ../../data/FODs_${sub}.mif ../${tck}_${sub}_SIFT.tck -out_mu mu.txt -output_debug -term_number 1 -nthreads 0 -quiet
+        cd ../../
 
-    # In order to compare connection densties between subjects, the streamline counts need to be scaled by the SIFT proportionality coefficient:
-    MU=$(cat tmp/SIFT_${sub}/mu.txt)
-    echo "Proportionality coefficient after SIFT: "$MU
+        echo ""
+        echo "SIFT data for \""${sub}"\", "${tck}" tracks:"
+        echo "Track count before SIFT: "$(tckinfo data/tracks_${tck}_${sub}.tck | grep " count" | tr -d '[:space:]' | cut -d":" -f2)
+        echo "Track count after SIFT: "$(tckinfo tmp/${tck}_${sub}_SIFT.tck | grep " count" | tr -d '[:space:]' | cut -d":" -f2)
+        echo "Cost function before SIFT: "$(mrmath tmp/SIFT_${tck}_${sub}/before_cost.mif sum - -axis 0 -quiet | mrmath - sum - -axis 1 -quiet | mrmath - sum - -axis 2 -quiet | mrstats - -output mean)
+        echo "Cost function after SIFT: "$(mrmath tmp/SIFT_${tck}_${sub}/after_cost.mif sum - -axis 0 -quiet | mrmath - sum - -axis 1 -quiet | mrmath - sum - -axis 2 -quiet | mrstats - -output mean)
 
-    # Now we obtain the estimated connection density of each bundle
-    for bundle in "${bundles[@]}"; do
-        tckedit tmp/${sub}_SIFT.tck -include data/mask_${bundle}.mif tmp/${sub}_SIFT_${bundle}.tck -quiet
-        COUNT=$(tckinfo tmp/${sub}_SIFT_${bundle}.tck | grep " count" | tr -d '[:space:]' | cut -d":" -f2)
-        echo "SIFT connectivity of "${bundle}" bundle: "$COUNT" streamlines, scaled: "$(echo "$MU * $COUNT" | bc)
+        # In order to compare connection densties between subjects, the streamline counts need to be scaled by the SIFT proportionality coefficient:
+        MU=$(cat tmp/SIFT_${tck}_${sub}/mu.txt)
+        echo "Proportionality coefficient after SIFT: "$MU
+
+        # Now we obtain the estimated connection density of each bundle
+        for bundle in "${bundles[@]}"; do
+            tckedit tmp/${tck}_${sub}_SIFT.tck -include data/mask_${bundle}.mif tmp/${tck}_${sub}_SIFT_${bundle}.tck -quiet
+            COUNT=$(tckinfo tmp/${tck}_${sub}_SIFT_${bundle}.tck | grep " count" | tr -d '[:space:]' | cut -d":" -f2)
+            echo "SIFT connectivity of "${bundle}" bundle: "$COUNT" streamlines, scaled: "$(echo "$MU * $COUNT" | bc)
+        done
+
     done
 
 done
 
+
+
 # Now: SIFT2 for both subjects
+# (only run on sparse track data)
 
 for sub in "${subjects[@]}"; do
 
     mkdir tmp/SIFT2_${sub}
     cd tmp/SIFT2_${sub}/
-    tcksift2 ../../data/tracks_${sub}.tck ../../data/FODs_${sub}.mif ../${sub}.csv -out_mu mu.txt -output_debug -quiet
+    tcksift2 ../../data/tracks_sparse_${sub}.tck ../../data/FODs_${sub}.mif ../${sub}.csv -out_mu mu.txt -output_debug -quiet
     cd ../../
 
     echo ""
@@ -71,7 +80,7 @@ for sub in "${subjects[@]}"; do
     echo "Proportionality coefficient: "$MU
 
     for bundle in "${bundles[@]}"; do
-        tckedit data/tracks_${sub}.tck -tck_weights_in tmp/${sub}.csv -include data/mask_${bundle}.mif -tck_weights_out tmp/${sub}_${bundle}.csv tmp/${sub}_${bundle}.tck -quiet
+        tckedit data/tracks_sparse_${sub}.tck -tck_weights_in tmp/${sub}.csv -include data/mask_${bundle}.mif -tck_weights_out tmp/${sub}_${bundle}.csv tmp/${sub}_${bundle}.tck -quiet
         echo "SIFT2 connectivity of "${bundle}" bundle: "$(cat tmp/${sub}_${bundle}.csv | tr " " "+" | sed 's/\(.*\)+$/\1/' | awk -v mu=${MU} '{printf("%s*(%s)\n",mu,$1)}' | bc)
     done
 
