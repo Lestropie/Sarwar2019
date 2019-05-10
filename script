@@ -24,7 +24,7 @@ declare -a bundles=("upper" "lower")
 
 # First: SIFT for both subjects
 
-# TODO Want to run for sparse tracks, the dense tracks
+# Run for sparse tracks, then dense tracks
 for tck in "${tracks[@]}"; do
 
     for sub in "${subjects[@]}"; do
