@@ -12,3 +12,9 @@ This is a response to the 'toy example' phantom presented in the article:
     Supporting Information Figure S14
 
 The demonstration is performed simply by cloning the repository and executing file "`script`".
+
+For other demonstrations related to this series of articles see:
+
+http://github.com/Lestropie/Zalesky2020
+
+http://github.com/Lestropie/Zalesky2020b
