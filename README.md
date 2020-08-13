@@ -1,10 +1,10 @@
-The data and script provided in this repository are associated with the following publication:
+The data and script provided in this repository are associated with the [article](https://onlinelibrary.wiley.com/doi/full/10.1002/mrm.27916):
 
     Robert E Smith, Fernanod Calamante and Alan Connelly
     Mapping connectomes with diffusion MRI: Deterministic or probabilistic tractography?
     Magnetic Resonance in Medicine 2020;83(3):787-790
 
-This is a response to the 'toy example' phantom presented in the article:
+This is a response to the 'toy example' phantom presented in the [article](https://onlinelibrary.wiley.com/doi/abs/10.1002/mrm.28037):
 
     Tabinda Sarwar, Kotagiri Ramamohanarao and Andrew Zalesky
     Mapping connectomes with diffusion MRI: deterministic or probabilistic tractography?
