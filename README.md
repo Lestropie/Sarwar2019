@@ -13,7 +13,9 @@ This is a response to the 'toy example' phantom presented in the article:
 
 The demonstration is performed simply by cloning the repository and executing file "`script`".
 
-For other demonstrations related to this series of articles see:
+-----
+
+This repository is the first of three demonstrations related to a series of articles in the Magnetic Resonance in Medicine journal. For demonstrations related to subsequent articles see:
 
 http://github.com/Lestropie/Zalesky2020
 
